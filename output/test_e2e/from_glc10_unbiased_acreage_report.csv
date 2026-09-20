@@ -1,0 +1,2 @@
+﻿crop_code,crop_name,naive_area_mu,unbiased_calibrated_mu,se_analytic_mu,cv_pct,ci_95_lower_mu,ci_95_upper_mu,producers_accuracy,users_accuracy,bias_correction_mu
+10,大田农作物,142330.2,136520.8,6177.5,4.52,124412.9,148628.7,78.4%,75.2%,5809.4
