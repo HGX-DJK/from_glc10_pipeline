@@ -164,7 +164,7 @@ class GLC10ReportGenerator:
         </div>
       </div>
       <div class="no-print">
-        <a class="btn btn-secondary" href="from_glc10_parcels_map.html" target="_blank">🌐 打开数字驾驶舱</a>
+        <a class="btn btn-secondary" href="from_glc10_parcels_map.html" target="_blank" rel="noopener noreferrer">🌐 打开数字驾驶舱</a>
         <button class="btn" onclick="window.print()">🖨️ 打印 / 导出 PDF</button>
       </div>
     </header>

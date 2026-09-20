@@ -153,7 +153,7 @@ class GLC10VectorExporter:
         }
 
         with open(geojson_path, "w", encoding="utf-8") as f:
-            json.dump(geojson_data, f, ensure_ascii=False, indent=2)
+            json.dump(geojson_data, f, ensure_ascii=False, separators=(',', ':'))
 
         # 写入属性表 CSV
         df = pd.DataFrame(records)

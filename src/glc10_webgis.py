@@ -29,7 +29,7 @@ class GLC10WebGISBuilder:
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
   <title>🌾 10米 FROM-GLC10 农业地块数字监测驾驶舱</title>
   
   <!-- 引入高稳定性 Leaflet 库（支持 file:// 协议本地渲染） -->
