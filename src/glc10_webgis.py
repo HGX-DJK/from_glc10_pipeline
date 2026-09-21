@@ -282,6 +282,11 @@ class GLC10WebGISBuilder:
           visibleCount++;
           visibleMu += parseFloat(feat.properties.area_mu) || 0;
           const p = feat.properties;
+          let suitColor = '#16a34a';
+          if ((p.machinery_suitability || '').indexOf('良') !== -1) suitColor = '#0284c7';
+          else if ((p.machinery_suitability || '').indexOf('中') !== -1) suitColor = '#d97706';
+          else if ((p.machinery_suitability || '').indexOf('异形') !== -1 || (p.machinery_suitability || '').indexOf('碎') !== -1) suitColor = '#dc2626';
+
           const content = `
             <div style="font-size:13px; line-height:1.6; min-width:210px;">
               <div style="font-size:14px; font-weight:800; color:#1e3a8a; margin-bottom:5px; border-bottom:1px solid #e2e8f0; padding-bottom:3px;">
@@ -291,7 +296,7 @@ class GLC10WebGISBuilder:
               <b>物理面积:</b> <span style="color:#16a34a; font-weight:bold;">${{Number(p.area_mu).toLocaleString()}} 亩</span> (${{p.area_ha}} ha)<br/>
               <b>地块周长:</b> ${{Number(p.perimeter_m).toLocaleString()}} 米<br/>
               <b>形状紧凑度:</b> ${{p.compactness}}<br/>
-              <b>适机评级:</b> <span style="color:#d97706; font-weight:700;">${{p.machinery_suitability}}</span><br/>
+              <b>适机评级:</b> <span style="color:${{suitColor}}; font-weight:700; background:#f8fafc; padding:1px 6px; border-radius:4px; border:1px solid #e2e8f0;">${{p.machinery_suitability}}</span><br/>
               <b>中心经纬度:</b> [${{p.center_lon}}°, ${{p.center_lat}}°]
             </div>
           `;

@@ -19,7 +19,8 @@ class GLC10VectorExporter:
         self.config = config or {}
         seg_cfg = self.config.get("segmentation", {})
         self.smooth_boundaries = seg_cfg.get("smooth_boundaries", True)
-        self.chaikin_iters = seg_cfg.get("chaikin_iterations", 2)
+        self.chaikin_iters = seg_cfg.get("chaikin_iterations", 1)
+        self.rdp_tolerance = float(seg_cfg.get("rdp_tolerance_pixels", 2.0))
         self.res_meters = self.config.get("spatial", {}).get("nominal_resolution_meters", 10.0)
 
     def export_geojson_and_table(self, parcel_id_mask: np.ndarray, parcel_metadata: list,
@@ -52,8 +53,8 @@ class GLC10VectorExporter:
             if len(ring_pts) < 4:
                 continue
 
-            # RDP 拓扑抽稀消除阶梯共线网格点，大幅降低点集规模与文件体积
-            ring_pts = simplify_polygon(ring_pts, tolerance=1.0)
+            # RDP 拓扑抽稀消除阶梯共线网格点，大幅降低点集规模与文件体积 (容差 2.0 像元 ≈ 20米)
+            ring_pts = simplify_polygon(ring_pts, tolerance=self.rdp_tolerance)
             if len(ring_pts) < 4:
                 continue
 
@@ -95,13 +96,16 @@ class GLC10VectorExporter:
             compactness = float(4.0 * np.pi * area_m2 / (perimeter_m * perimeter_m))
             compactness = min(max(compactness, 0.001), 1.0)
 
-            # 农机作业适宜度等级评价
-            if compactness >= 0.35 and p_info["area_mu"] >= 15.0:
+            # 农机作业适宜度科学评价 (面积规模与几何紧凑度双重矩阵考核)
+            area_mu = p_info["area_mu"]
+            if compactness >= 0.25 and area_mu >= 15.0:
                 machinery_suitability = "优 (集中连片优质适机区)"
-            elif compactness >= 0.20 or p_info["area_mu"] >= 5.0:
+            elif compactness >= 0.10 and area_mu >= 5.0:
                 machinery_suitability = "良 (标准规整农机作业区)"
+            elif compactness >= 0.04:
+                machinery_suitability = "中 (狭长带状待整合区)"
             else:
-                machinery_suitability = "中/碎 (建议平整并块优化)"
+                machinery_suitability = "异形/碎 (建议平整并块整治)"
 
             # 中心坐标
             all_xs = [p[0] for p in pts_2d]
@@ -113,7 +117,8 @@ class GLC10VectorExporter:
             if pts_2d[0] != pts_2d[-1]:
                 pts_2d.append(pts_2d[0])
 
-            polygon_coords = [[round(float(c[0]), 6), round(float(c[1]), 6)] for c in pts_2d]
+            # 坐标精度保留 5 位小数 (约 1.1 米分辨率，大幅压缩 GeoJSON/HTML 体积)
+            polygon_coords = [[round(float(c[0]), 5), round(float(c[1]), 5)] for c in pts_2d]
 
             prop = {
                 "parcel_id": p_info["parcel_id"],

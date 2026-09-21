@@ -46,10 +46,11 @@ segmentation:
   cut_cross_crop_boundaries: true    # 启用不同作物相邻交界处的零拷贝梯度切片差分
   fill_internal_holes: true          # 闭合地块内部微小车辙与阴影空洞
   min_parcel_area_m2: 200.0          # 最小合法地块面积阈值（200㎡ ≈ 0.3 亩，滤除杂乱碎斑）
-  max_parcel_area_m2: 20000000.0     # 单块上限阈值（20,000,000㎡ = 30,000 亩 = 2,000 公顷，容纳超大连片核心灌区）
+  max_parcel_area_m2: 50000000.0     # 单块上限阈值（50,000,000㎡ = 7.5万亩 = 5,000公顷，容纳大尺度平原核心集中片区）
   max_export_parcels: 800            # 优选导出的核心主力地块数量（保障前端地图与属性表秒开）
   smooth_boundaries: true            # 启用 Chaikin 拐角拓扑平滑（消除 10 米栅格阶梯锯齿）
   chaikin_iterations: 1              # Chaikin 平滑迭代轮数 (1 轮适度平滑且保持轻量)
+  rdp_tolerance_pixels: 2.0          # RDP 拓扑抽稀容差 (像元单位，2.0 像元 ≈ 20米，压缩 80%+ 矢量体积)
 
 spatial:
   nominal_resolution_meters: 10.0    # FROM-GLC10 物理标称分辨率 (10.0 米)

@@ -53,12 +53,21 @@ class GLC10ReportGenerator:
             dom_ua = "N/A"
             dom_cv = 0.0
 
-        # 农机适宜度优良占比
+        # 农机适宜度分级统计
+        suit_counts = {"优": 0, "良": 0, "中": 0, "异形/碎": 0}
         if not df_parcels.empty and "machinery_suitability" in df_parcels.columns:
-            good_parcels = df_parcels[df_parcels["machinery_suitability"].str.contains("优|良")]
-            good_pct = len(good_parcels) / total_parcels * 100.0
+            for s in df_parcels["machinery_suitability"]:
+                if "优" in str(s):
+                    suit_counts["优"] += 1
+                elif "良" in str(s):
+                    suit_counts["良"] += 1
+                elif "中" in str(s):
+                    suit_counts["中"] += 1
+                else:
+                    suit_counts["异形/碎"] += 1
+            good_pct = (suit_counts["优"] + suit_counts["良"]) / max(total_parcels, 1) * 100.0
         else:
-            good_pct = 85.0
+            good_pct = 0.0
 
         # 构建全作物统计大表 HTML
         table_rows_html = ""
@@ -182,27 +191,27 @@ class GLC10ReportGenerator:
       </div>
     </header>
 
-    <!-- 核心指标看板 -->
+    <!-- 核心指标看板 (双层口径清晰呈现) -->
     <div class="kpi-grid">
       <div class="kpi-card">
-        <div class="kpi-tag">像元直数检出规模</div>
+        <div class="kpi-tag">【全域】像元直数初测规模</div>
         <div class="kpi-val">{total_naive_mu:,.1f} <span class="kpi-unit">亩</span></div>
         <div class="kpi-desc">含细微田埂与边界混合像元</div>
       </div>
       <div class="kpi-card" style="border-top-color:#16a34a; background:#f0fdf4;">
-        <div class="kpi-tag" style="color:#166534;">联合国法定无偏总面积</div>
+        <div class="kpi-tag" style="color:#166534;">【全域】联合国法定无偏总面积</div>
         <div class="kpi-val" style="color:#166534;">{total_calib_mu:,.1f} <span class="kpi-unit">亩</span></div>
         <div class="kpi-desc">消除系统边界高估/漏检偏差</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-tag">主力优势作物 ({dom_name})</div>
+        <div class="kpi-tag">【全域】优势作物 ({dom_name})</div>
         <div class="kpi-val">{dom_mu:,.1f} <span class="kpi-unit">亩</span></div>
         <div class="kpi-desc">用户精度 UA: {dom_ua} (CV {dom_cv:.1f}%)</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-tag">规模化适机连片地块</div>
-        <div class="kpi-val">{total_parcels} <span class="kpi-unit">块</span></div>
-        <div class="kpi-desc">优良适机比例: {good_pct:.1f}%</div>
+        <div class="kpi-tag">【示范】核心主力地块 (Top {total_parcels})</div>
+        <div class="kpi-val">{total_parcel_mu:,.1f} <span class="kpi-unit">亩</span></div>
+        <div class="kpi-desc">共 {total_parcels} 块 · 优良适机率: {good_pct:.1f}%</div>
       </div>
     </div>
 
@@ -244,12 +253,20 @@ class GLC10ReportGenerator:
 
     <!-- 第二章：10 米地块高精度分割与农机适宜度评估 -->
     <div class="section-title">
-      <span>二、 10米高精度田埂切分与独立地块适机性台账 (Top 10 核心主力地块)</span>
+      <span>二、 10米高精度田埂切分与独立地块适机性台账 (Top {total_parcels} 核心主力地块)</span>
+      <span style="font-size:12px; font-weight:normal; color:#64748b;">累计净耕地: {total_parcel_mu:,.1f} 亩 (占全域 {(total_parcel_mu/max(total_calib_mu,1))*100:.1f}%)</span>
     </div>
     <p style="font-size:13.5px; color:#475569; line-height:1.7;">
       基于 10 米像元空间特征与形态学开运算算子，流水线成功将连片作物切分为独立农田斑块，
-      并利用 Chaikin 算法完成边界拓扑平滑（消除栅格锯齿）。以下列出全景面积最大的前 10 个主力地块台账：
+      并利用 Chaikin 算法完成边界拓扑平滑（消除栅格锯齿）。经面积规模与几何紧凑度双重矩阵科学评价，农机适宜度分布如下：
     </p>
+
+    <div style="display:flex; flex-wrap:wrap; gap:10px; margin: 10px 0 18px 0; font-size:12.5px;">
+      <span style="background:#dcfce7; color:#166534; padding:5px 12px; border-radius:6px; font-weight:bold;">🟢 优 (集中优质适机): {suit_counts['优']} 块 ({(suit_counts['优']/max(total_parcels,1))*100:.1f}%)</span>
+      <span style="background:#e0f2fe; color:#0369a1; padding:5px 12px; border-radius:6px; font-weight:bold;">🔵 良 (标准规整作业): {suit_counts['良']} 块 ({(suit_counts['良']/max(total_parcels,1))*100:.1f}%)</span>
+      <span style="background:#fef3c7; color:#92400e; padding:5px 12px; border-radius:6px; font-weight:bold;">🟡 中 (狭长带状待整合): {suit_counts['中']} 块 ({(suit_counts['中']/max(total_parcels,1))*100:.1f}%)</span>
+      <span style="background:#fee2e2; color:#991b1b; padding:5px 12px; border-radius:6px; font-weight:bold;">🔴 异形/碎 (建议平整并块): {suit_counts['异形/碎']} 块 ({(suit_counts['异形/碎']/max(total_parcels,1))*100:.1f}%)</span>
+    </div>
 
     <table class="data-table">
       <thead>
