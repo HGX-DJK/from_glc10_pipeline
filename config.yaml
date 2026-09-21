@@ -10,21 +10,14 @@ project:
   description: "基于全球 10 米地表覆盖产品 (FROM-GLC10) 的农作物分类图斑提取、田埂切分与联合国无偏面积估计"
 
 input_source:
-  # 运行模式：'geotiff' (读取本地下载的 10 米 FROM-GLC10 瓦片) 或 'synthetic' (内置 10 米基准仿真自测)
-  mode: "synthetic"
-  # 用户从 https://data-starcloud.pcl.ac.cn/iearthdata/1 下载的 2°×2° 瓦片存放目录
+  # 用户从 https://data-starcloud.pcl.ac.cn/iearthdata/1 下载的 2°×2° 真实瓦片存放目录
   geotiff_dir: "data/glc10_tifs"
 
-# FROM-GLC10 官方分类体系与农作物图层提取映射表
+# FROM-GLC10 官方分类体系与农作物图层提取映射表 (Gong et al., Science Bulletin)
 glc10_classes:
-  # 目标农作物类别定义（用户可按需开启提取）：
+  # 目标农作物类别定义 (FROM-GLC10 官方规范中所有耕地统一标为代码 10):
   target_crop_codes:
-    10: "大田农作物 (通用耕地)"        # Level-1 Crop
-    11: "水稻田 (Paddy Rice)"          # Level-2 Rice
-    12: "设施农业 / 温室大棚 (Greenhouse)" # Level-2 Greenhouse
-    13: "旱地其他农作物 (Other Crops)"   # Level-2 Other upland crops
-    24: "经济果园 (Orchard)"           # Level-2 Orchard (可选)
-    94: "休闲裸耕地 (Bare Cropland)"   # Level-2 季节性翻耕裸田 (可选)
+    10: "耕地/农田 (Cropland)"
 
   # 背景/非农田类别（自动作为田埂与背景空间阻断层）：
   background_codes:
@@ -68,15 +61,10 @@ unbiased_inference:
   n_bootstrap: 2000                  # 95% 置信区间重抽样迭代次数
   confidence_level: 0.95
   
-  # 清华大学团队在《Science Bulletin》发表的 FROM-GLC10 官方先验精度基准
+  # 清华大学团队在《Science Bulletin》发表的 FROM-GLC10 官方耕地先验精度基准
   # 当用户未提供外部地面抽样样方时，自动调用该公信力先验进行去偏估计
   science_bulletin_priors:
-    10: { pa: 0.784, ua: 0.752, name: "大田农作物" }
-    11: { pa: 0.825, ua: 0.810, name: "水稻田" }
-    12: { pa: 0.760, ua: 0.745, name: "设施温室大棚" }
-    13: { pa: 0.771, ua: 0.738, name: "旱地其他农作物" }
-    24: { pa: 0.710, ua: 0.695, name: "经济果园" }
-    94: { pa: 0.680, ua: 0.650, name: "休闲裸耕地" }
+    10: { pa: 0.784, ua: 0.752, name: "耕地/农田" }
 
 paths:
   data_dir: "data"

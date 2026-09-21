@@ -44,7 +44,7 @@ def load_config(config_path: str = "config.yaml") -> dict:
 
 
 def run_pipeline(config_path: str = "config.yaml", tif_path: str = None,
-                 mode: str = None, output_dir_override: str = None):
+                 output_dir_override: str = None):
     t0 = time.time()
     config = load_config(config_path)
 
@@ -56,10 +56,15 @@ def run_pipeline(config_path: str = "config.yaml", tif_path: str = None,
     print("   标准依据：联合国粮农组织与统计司 (FAO/UNSD)《农业统计遥感手册》")
     print("=" * 88)
 
-    # 1. 载入 10 米地表覆盖瓦片并提取农情图层
+    # 1. 载入 10 米真实地表覆盖瓦片并提取农情图层
     print("📡 [步骤 1/5] 解析 10 米 FROM-GLC10 地理参考与分类图层...")
     loader = GLC10Loader(config)
-    raw_raster, geo_info = loader.load_glc10_raster(tif_path)
+    try:
+        raw_raster, geo_info = loader.load_glc10_raster(tif_path)
+    except FileNotFoundError as e:
+        print(f"\n❌ [输入数据缺失] {e}\n")
+        sys.exit(1)
+
     crop_mask, naive_stats = loader.extract_crop_mask(raw_raster)
 
     total_pixels = raw_raster.size
@@ -128,9 +133,8 @@ def run_pipeline(config_path: str = "config.yaml", tif_path: str = None,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="FROM-GLC10 (10米地表覆盖) 专用农业地块提取流水线")
     parser.add_argument("--config", default="config.yaml", help="配置文件路径 (默认: config.yaml)")
-    parser.add_argument("--tif", default=None, help="指定的 10 米 FROM-GLC10 GeoTIFF 影像路径")
-    parser.add_argument("--mode", choices=["synthetic", "geotiff"], default=None, help="运行模式")
-    parser.add_argument("--output-dir", default=None, help="成果输出目录")
+    parser.add_argument("--tif", default=None, help="指定的 10 米 FROM-GLC10 GeoTIFF 真实影像路径 (如未指定则自动扫描 data/glc10_tifs/)")
+    parser.add_argument("--output-dir", default=None, help="成果输出目录 (默认: output/)")
     parser.add_argument("--self-check", action="store_true", help="执行自动化健康检查与全量测试")
     args = parser.parse_args()
 
@@ -142,6 +146,5 @@ if __name__ == "__main__":
     run_pipeline(
         config_path=args.config,
         tif_path=args.tif,
-        mode=args.mode,
         output_dir_override=args.output_dir
     )

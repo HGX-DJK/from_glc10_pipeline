@@ -7,7 +7,6 @@ FROM-GLC10 瓦片数据读取与农情图层映射模块。
 import os
 import glob
 import numpy as np
-from src.glc10_synthetic import GLC10SyntheticGenerator
 
 try:
     from src.env_utils import sanitize_proj_gdal_env
@@ -27,22 +26,23 @@ class GLC10Loader:
         self.config = config or {}
         self.glc10_cfg = self.config.get("glc10_classes", {})
         self.target_crop_codes = self.glc10_cfg.get("target_crop_codes", {
-            10: "大田农作物",
-            11: "水稻田",
-            12: "设施温室大棚",
-            13: "旱地其他农作物",
-            24: "经济果园",
-            94: "休闲裸耕地"
+            10: "耕地/农田 (Cropland)"
         })
         self.background_codes = self.glc10_cfg.get("background_codes", {})
         self.nominal_res = self.config.get("spatial", {}).get("nominal_resolution_meters", 10.0)
 
     def resolve_glc10_file(self, specified_path: str = None) -> str:
-        """解析输入 GeoTIFF 路径，若指定 synthetic 模式或文件缺失则生成/使用多作物基准仿真瓦片。"""
-        if specified_path and os.path.exists(specified_path):
-            return specified_path
+        """
+        解析输入 GeoTIFF 路径。
+        1. 优先使用用户通过 --tif 显式指定的真实影像路径；
+        2. 其次自动扫描 data/glc10_tifs/ 目录下的真实瓦片；
+        3. 若均未找到，抛出友好的 FileNotFoundError 指引。
+        """
+        if specified_path:
+            if os.path.exists(specified_path):
+                return specified_path
+            raise FileNotFoundError(f"指定的 GeoTIFF 影像不存在: {specified_path}")
 
-        run_mode = str(self.config.get("input_source", {}).get("mode", "geotiff")).lower()
         geotiff_dir = self.config.get("input_source", {}).get("geotiff_dir", "data/glc10_tifs")
         if not os.path.isabs(geotiff_dir):
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -50,31 +50,17 @@ class GLC10Loader:
             if os.path.exists(cand_dir):
                 geotiff_dir = cand_dir
 
-        synthetic_path = os.path.join(geotiff_dir, "FROM_GLC10_multicrop_benchmark_demo.tif")
-
-        # 1. 若显式指定为 synthetic 模式，使用标准多作物基准瓦片 (水稻11/大棚12/旱作13/果园24/翻耕94)
-        if run_mode == "synthetic":
-            os.makedirs(geotiff_dir, exist_ok=True)
-            if not os.path.exists(synthetic_path):
-                synth = GLC10SyntheticGenerator(height=600, width=600, res_meters=self.nominal_res)
-                synth.save_synthetic_geotiff(synthetic_path)
-            return synthetic_path
-
-        # 2. geotiff 真实瓦片模式：优先读取用户放置的真实瓦片
         if os.path.exists(geotiff_dir):
             candidates = sorted(glob.glob(os.path.join(geotiff_dir, "*.tif*")))
             real_candidates = [c for c in candidates if "benchmark_demo" not in os.path.basename(c)]
             if real_candidates:
                 return real_candidates[0]
-            elif candidates:
-                return candidates[0]
 
-        # 3. 兜底自动生成开箱即用多作物仿真数据
-        os.makedirs(geotiff_dir, exist_ok=True)
-        if not os.path.exists(synthetic_path):
-            synth = GLC10SyntheticGenerator(height=600, width=600, res_meters=self.nominal_res)
-            synth.save_synthetic_geotiff(synthetic_path)
-        return synthetic_path
+        raise FileNotFoundError(
+            f"未在目录 '{geotiff_dir}' 下检测到有效的 FROM-GLC10 GeoTIFF (.tif) 影像！\n"
+            "👉 请从鹏城星云 iEarth 数据平台 (https://data-starcloud.pcl.ac.cn/iearthdata/1) 下载真实瓦片放入该目录，\n"
+            "   或在执行时添加参数: python main.py --tif /path/to/your_tile.tif"
+        )
 
     def load_glc10_raster(self, tif_path: str = None) -> tuple:
         """
@@ -86,12 +72,7 @@ class GLC10Loader:
         resolved_path = self.resolve_glc10_file(tif_path)
 
         if not HAS_RASTERIO:
-            # 备用无 rasterio 降级处理
-            synth = GLC10SyntheticGenerator()
-            raw_raster = synth.generate_synthetic_glc10_array()
-            geo_info = synth.get_geo_info()
-            geo_info["tif_path"] = resolved_path
-            return raw_raster, geo_info
+            raise ImportError("未检测到 rasterio 空间遥感库，请执行 pip install rasterio 安装。")
 
         with rasterio.open(resolved_path) as src:
             raw_raster = src.read(1)
