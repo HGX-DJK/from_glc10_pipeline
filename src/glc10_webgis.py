@@ -203,12 +203,14 @@ class GLC10WebGISBuilder:
 
     function getColor(code) {{
       switch(parseInt(code)) {{
-        case 11: return '#0284c7'; // 水稻 - 天蓝
-        case 12: return '#e11d48'; // 大棚 - 玫红
-        case 13: return '#16a34a'; // 旱作 - 翠绿
-        case 10: return '#16a34a'; // 通用大田 - 翠绿
-        case 24: return '#d97706'; // 果园 - 橙黄
-        case 94: return '#a16207'; // 裸耕 - 棕褐
+        case 10: return '#16a34a'; // 耕地 - 翠绿
+        case 20: return '#065f46'; // 森林 - 深绿
+        case 30: return '#84cc16'; // 草地 - 浅绿
+        case 40: return '#65a30d'; // 灌木丛 - 橄榄
+        case 50: return '#0ea5e9'; // 湿地 - 青色
+        case 60: return '#1d4ed8'; // 水体 - 深蓝
+        case 80: return '#64748b'; // 建筑 - 灰色
+        case 90: return '#d97706'; // 裸地 - 棕褐
         default: return '#059669';
       }}
     }}

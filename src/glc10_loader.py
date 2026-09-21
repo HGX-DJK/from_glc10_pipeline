@@ -62,6 +62,62 @@ class GLC10Loader:
             "   或在执行时添加参数: python main.py --tif /path/to/your_tile.tif"
         )
 
+    def list_all_glc10_files(self) -> list:
+        """扫描并返回 data/glc10_tifs/ 目录下的所有 GeoTIFF 真实影像文件。"""
+        geotiff_dir = self.config.get("input_source", {}).get("geotiff_dir", "data/glc10_tifs")
+        if not os.path.isabs(geotiff_dir):
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            cand_dir = os.path.join(base_dir, geotiff_dir)
+            if os.path.exists(cand_dir):
+                geotiff_dir = cand_dir
+
+        if os.path.exists(geotiff_dir):
+            candidates = sorted(glob.glob(os.path.join(geotiff_dir, "*.tif*")))
+            return [c for c in candidates if "benchmark_demo" not in os.path.basename(c)]
+        return []
+
+    def get_file_summary(self, tif_path: str) -> dict:
+        """
+        快速轻量读取单幅影像元数据与农田概貌（无需全量读入内存）。
+        """
+        if not os.path.exists(tif_path) or not HAS_RASTERIO:
+            return {}
+        try:
+            with rasterio.open(tif_path) as src:
+                b = src.bounds
+                center_lat = (b.bottom + b.top) / 2.0
+                center_lon = (b.left + b.right) / 2.0
+
+                if 18.0 <= center_lat <= 54.0 and 73.0 <= center_lon <= 135.0:
+                    if 33.0 <= center_lat <= 36.5 and 105.0 <= center_lon <= 110.0:
+                        region = "中国 陕西/甘肃 (关中盆地/宝鸡/天水 核心农业区)"
+                    else:
+                        region = f"中国区域 (纬度 {center_lat:.1f}°N, 经度 {center_lon:.1f}°E)"
+                elif center_lat > 50.0 and 60.0 <= center_lon <= 180.0:
+                    if center_lat >= 62.0:
+                        region = "俄罗斯 萨哈(雅库特)共和国 (维尔霍扬斯克/北极圈苔原冻土带)"
+                    else:
+                        region = "俄罗斯 东西伯利亚 (阿尔丹高原/极地亚寒带针叶林带)"
+                else:
+                    region = f"全球区域 [Lat: {b.bottom:.1f}°~{b.top:.1f}°, Lon: {b.left:.1f}°~{b.right}°]"
+
+                sample = src.read(1, out_shape=(1, 500, 500))
+                crop_sample_pct = float(np.mean(sample == 10)) * 100.0
+
+                return {
+                    "path": tif_path,
+                    "filename": os.path.basename(tif_path),
+                    "width": src.width,
+                    "height": src.height,
+                    "crs": str(src.crs),
+                    "bounds": (round(b.left, 2), round(b.bottom, 2), round(b.right, 2), round(b.top, 2)),
+                    "region": region,
+                    "crop_sample_pct": round(crop_sample_pct, 2),
+                    "has_cropland": crop_sample_pct > 0.05
+                }
+        except Exception as err:
+            return {"path": tif_path, "filename": os.path.basename(tif_path), "error": str(err)}
+
     def load_glc10_raster(self, tif_path: str = None) -> tuple:
         """
         读取 10 米 FROM-GLC10 GeoTIFF 影像。

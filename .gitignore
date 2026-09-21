@@ -50,3 +50,5 @@ env/
 Thumbs.db
 ehthumbs.db
 [Dd]esktop.ini
+
+.powershell.cmd

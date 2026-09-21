@@ -21,9 +21,11 @@ class GLC10ParcelSegmenter:
         self.cut_cross_crop = seg_cfg.get("cut_cross_crop_boundaries", True)
         self.fill_holes = seg_cfg.get("fill_internal_holes", True)
         self.min_area_m2 = seg_cfg.get("min_parcel_area_m2", 200.0)
-        self.max_area_m2 = seg_cfg.get("max_parcel_area_m2", 20000000.0)
+        self.max_area_m2 = seg_cfg.get("max_parcel_area_m2", 50000000.0)
         self.struct_type = seg_cfg.get("erosion_structure_type", "cross")
         self.max_export_parcels = seg_cfg.get("max_export_parcels", 800)
+        self.partition_plains = seg_cfg.get("partition_large_plains", True)
+        self.grid_step_m = float(seg_cfg.get("agricultural_grid_step_m", 500.0))
         self.res_meters = self.config.get("spatial", {}).get("nominal_resolution_meters", 10.0)
         self.pixel_area_m2 = self.res_meters * self.res_meters  # 100 m²
         self.target_crop_codes = self.config.get("glc10_classes", {}).get("target_crop_codes", {})
@@ -32,7 +34,7 @@ class GLC10ParcelSegmenter:
         """
         对 10 米农作物图层执行田埂形态学分割与地块斑块提取。
         参数:
-            crop_mask (np.ndarray): 农作物分类代码矩阵 (0=非农, 11=水稻, 12=大棚, 13=旱作等)
+            crop_mask (np.ndarray): 农作物分类代码矩阵 (0=非农, 10=耕地等)
         返回:
             parcel_id_mask (np.ndarray): 独立地块编号矩阵 (0=田埂/非农, 1..N=独立地块)
             parcel_list (list): 各地块属性字典清单
@@ -49,6 +51,8 @@ class GLC10ParcelSegmenter:
             cropland_binary[1:, :][diff_v] = 0
             cropland_binary[:, :-1][diff_h] = 0
             cropland_binary[:, 1:][diff_h] = 0
+
+        # [已移除] 1.5 强制网格切分（响应用户反馈：恢复农田真实自然的不规则形态，不再强制切出方块）
 
         # 2. 10 米专属形态学开运算 (Opening = 腐蚀+膨胀)
         # 支持 cross (4-邻域十字交叉核，保护 10~20 米小农狭长带状田) 与 square (8-邻域方块核)

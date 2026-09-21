@@ -14,6 +14,15 @@ import pandas as pd
 from src.geometry_utils import trace_grid_boundary, simplify_polygon, chaikin_smooth, haversine_distance
 
 
+try:
+    import rasterio
+    from rasterio.windows import Window
+    from rasterio.features import shapes
+    HAS_RASTERIO_SHAPES = True
+except ImportError:
+    HAS_RASTERIO_SHAPES = False
+
+
 class GLC10VectorExporter:
     def __init__(self, config: dict = None):
         self.config = config or {}
@@ -39,40 +48,57 @@ class GLC10VectorExporter:
 
         features = []
         records = []
+        total_p = len(parcel_metadata)
 
-        for p_info in parcel_metadata:
+        for idx, p_info in enumerate(parcel_metadata):
+            if (idx + 1) % 50 == 0 or idx == total_p - 1:
+                print(f"\r   -> 正在提取与平滑矢量地块: {idx + 1}/{total_p} ...", end="", flush=True)
+
             int_id = p_info["int_id"]
             sl = p_info["bbox_slice"]
 
-            sub_mask = (parcel_id_mask[sl] == int_id)
+            sub_mask = (parcel_id_mask[sl] == int_id).astype(np.uint8)
             if not np.any(sub_mask):
                 continue
 
-            # 纯 NumPy 栅格边缘拓扑追踪
-            ring_pts = trace_grid_boundary(sub_mask)
-            if len(ring_pts) < 4:
+            pts_2d = None
+            # 1. 优先使用 GDAL/rasterio 底层 C++ 拓扑追踪引擎（微秒级响应）
+            if HAS_RASTERIO_SHAPES and transform is not None:
+                win = Window(col_off=sl[1].start, row_off=sl[0].start,
+                             width=sl[1].stop - sl[1].start, height=sl[0].stop - sl[0].start)
+                sub_transform = rasterio.windows.transform(win, transform)
+                poly_rings = []
+                for geom, val in shapes(sub_mask, mask=sub_mask.astype(bool), transform=sub_transform):
+                    if geom["type"] == "Polygon" and len(geom["coordinates"]) > 0:
+                        poly_rings.append(geom["coordinates"][0])
+                if poly_rings:
+                    pts_2d = max(poly_rings, key=len)
+
+            # 2. 备用纯 Python 追踪逻辑
+            if pts_2d is None:
+                ring_pts = trace_grid_boundary(sub_mask)
+                if len(ring_pts) < 4:
+                    continue
+                row_offset = sl[0].start
+                col_offset = sl[1].start
+                global_rows = np.array([p[0] + row_offset for p in ring_pts], dtype=float)
+                global_cols = np.array([p[1] + col_offset for p in ring_pts], dtype=float)
+                if transform is not None:
+                    xs = transform[2] + global_cols * transform[0] + global_rows * transform[1]
+                    ys = transform[5] + global_cols * transform[3] + global_rows * transform[4]
+                else:
+                    xs = geo_info.get("origin_lon", 116.5) + global_cols * geo_info.get("resolution_x", 0.0001)
+                    ys = geo_info.get("origin_lat", 35.5) - global_rows * geo_info.get("resolution_y", 0.0001)
+                pts_2d = list(zip(xs.tolist(), ys.tolist()))
+
+            if len(pts_2d) < 4:
                 continue
 
-            # RDP 拓扑抽稀消除阶梯共线网格点，大幅降低点集规模与文件体积 (容差 2.0 像元 ≈ 20米)
-            ring_pts = simplify_polygon(ring_pts, tolerance=self.rdp_tolerance)
-            if len(ring_pts) < 4:
+            # RDP 拓扑抽稀 (大地经纬度容差 ~ 10-20 米: 0.0001 度 ≈ 10米)
+            tol = (self.rdp_tolerance * 0.0001) if is_geo else (self.rdp_tolerance * self.res_meters)
+            pts_2d = simplify_polygon(pts_2d, tolerance=tol)
+            if len(pts_2d) < 4:
                 continue
-
-            # 偏移回全景栅格坐标 (row, col)
-            row_offset = sl[0].start
-            col_offset = sl[1].start
-            global_rows = np.array([p[0] + row_offset for p in ring_pts], dtype=float)
-            global_cols = np.array([p[1] + col_offset for p in ring_pts], dtype=float)
-
-            # 转换为地理空间坐标 [x, y]
-            if transform is not None:
-                xs = transform[2] + global_cols * transform[0] + global_rows * transform[1]
-                ys = transform[5] + global_cols * transform[3] + global_rows * transform[4]
-            else:
-                xs = geo_info.get("origin_lon", 116.5) + global_cols * geo_info.get("resolution_x", 0.0001)
-                ys = geo_info.get("origin_lat", 35.5) - global_rows * geo_info.get("resolution_y", 0.0001)
-
-            pts_2d = list(zip(xs.tolist(), ys.tolist()))
 
             # Chaikin 平滑
             if self.smooth_boundaries and len(pts_2d) >= 6:
@@ -145,6 +171,9 @@ class GLC10VectorExporter:
             })
 
             records.append(prop)
+
+        if total_p > 0:
+            print(f"\r   -> 矢量地块拓扑平滑与属性封装完成: 共计 {len(records)} 块主力农田多边形")
 
         # 写入标准 GeoJSON
         geojson_data = {

@@ -15,26 +15,26 @@ input_source:
 
 # FROM-GLC10 官方分类体系与农作物图层提取映射表 (Gong et al., Science Bulletin)
 glc10_classes:
-  # 目标农作物类别定义 (FROM-GLC10 官方规范中所有耕地统一标为代码 10):
+  # 目标提取地表覆盖类别 (应用户要求，现已支持全要素提取，不仅限于农田)
   target_crop_codes:
     10: "耕地/农田 (Cropland)"
+    20: "森林 (Forest)"
+    30: "草地 (Grassland)"
+    40: "灌木丛 (Shrub)"
+    50: "湿地 (Wetland)"
+    60: "水体/河流 (Water)"
+    80: "建设用地/城市 (Impervious)"
+    90: "荒漠裸地 (Bareland)"
 
-  # 背景/非农田类别（自动作为田埂与背景空间阻断层）：
+  # 背景/排除类别（不予矢量化，作为空白区域）：
   background_codes:
     0: "未分类/背景"
-    20: "森林大类 (Forest)"
     21: "阔叶林"
     22: "针叶林"
     23: "混交林"
-    30: "草地 (Grass)"
     31: "人工草地"
     32: "天然草地"
-    40: "灌木丛 (Shrub)"
-    50: "湿地 (Wetland)"
-    60: "水体 (Water)"
     70: "苔原 (Tundra)"
-    80: "建设用地/不透水面 (Impervious)"
-    90: "荒漠裸地 (Bareland)"
     100: "冰雪 (Snow/Ice)"
     120: "云/阴影 (Cloud)"
 
@@ -45,6 +45,8 @@ segmentation:
   erosion_kernel_size: 3             # 结构元素尺寸
   cut_cross_crop_boundaries: true    # 启用不同作物相邻交界处的零拷贝梯度切片差分
   fill_internal_holes: true          # 闭合地块内部微小车辙与阴影空洞
+  partition_large_plains: true       # 启用高标准农田自适应网格切分（彻底消除“大片连体粘连”，生成真实地块单元）
+  agricultural_grid_step_m: 500.0    # 生产路与排灌渠网标准网格步长 (500米，约 360 亩标准规整作业方田)
   min_parcel_area_m2: 200.0          # 最小合法地块面积阈值（200㎡ ≈ 0.3 亩，滤除杂乱碎斑）
   max_parcel_area_m2: 50000000.0     # 单块上限阈值（50,000,000㎡ = 7.5万亩 = 5,000公顷，容纳大尺度平原核心集中片区）
   max_export_parcels: 800            # 优选导出的核心主力地块数量（保障前端地图与属性表秒开）
