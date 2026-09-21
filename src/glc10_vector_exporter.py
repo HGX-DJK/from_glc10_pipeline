@@ -53,7 +53,7 @@ class GLC10VectorExporter:
                 continue
 
             # RDP 拓扑抽稀消除阶梯共线网格点，大幅降低点集规模与文件体积
-            ring_pts = simplify_polygon(ring_pts, tolerance=0.5)
+            ring_pts = simplify_polygon(ring_pts, tolerance=1.0)
             if len(ring_pts) < 4:
                 continue
 

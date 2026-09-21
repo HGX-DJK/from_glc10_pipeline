@@ -21,7 +21,8 @@ class GLC10ParcelSegmenter:
         self.cut_cross_crop = seg_cfg.get("cut_cross_crop_boundaries", True)
         self.fill_holes = seg_cfg.get("fill_internal_holes", True)
         self.min_area_m2 = seg_cfg.get("min_parcel_area_m2", 200.0)
-        self.max_area_m2 = seg_cfg.get("max_parcel_area_m2", 500000.0)
+        self.max_area_m2 = seg_cfg.get("max_parcel_area_m2", 20000000.0)
+        self.struct_type = seg_cfg.get("erosion_structure_type", "cross")
         self.max_export_parcels = seg_cfg.get("max_export_parcels", 800)
         self.res_meters = self.config.get("spatial", {}).get("nominal_resolution_meters", 10.0)
         self.pixel_area_m2 = self.res_meters * self.res_meters  # 100 m²
@@ -49,10 +50,14 @@ class GLC10ParcelSegmenter:
             cropland_binary[:, :-1][diff_h] = 0
             cropland_binary[:, 1:][diff_h] = 0
 
-        # 2. 10 米专属形态学开运算 (Opening = 腐蚀+膨胀)，切断 1~2 像素宽度的细窄机耕道与田埂
+        # 2. 10 米专属形态学开运算 (Opening = 腐蚀+膨胀)
+        # 支持 cross (4-邻域十字交叉核，保护 10~20 米小农狭长带状田) 与 square (8-邻域方块核)
         if self.apply_erosion:
-            k = max(3, self.kernel_size if self.kernel_size % 2 == 1 else self.kernel_size + 1)
-            structure = np.ones((k, k), dtype=np.uint8)
+            if self.struct_type == "cross":
+                structure = ndimage.generate_binary_structure(2, 1)  # 十字核
+            else:
+                k = max(3, self.kernel_size if self.kernel_size % 2 == 1 else self.kernel_size + 1)
+                structure = np.ones((k, k), dtype=np.uint8)
             cleaned = ndimage.binary_opening(cropland_binary, structure=structure).astype(np.uint8)
         else:
             cleaned = cropland_binary

@@ -1,0 +1,52 @@
+# ==============================================================================
+# 🌾 FROM-GLC10 农业地块提取流水线 (from_glc10_pipeline) Git 忽略规则
+# ==============================================================================
+
+# --- 1. 遥感影像与数据目录 (data/) ---
+data/*
+!data/.gitkeep
+data/glc10_tifs/*
+!data/glc10_tifs/.gitkeep
+
+# 栅格影像扩展名全局保护
+*.tif
+*.tiff
+*.TIF
+*.TIFF
+*.img
+*.nc
+*.hdf
+*.h5
+*.jp2
+*.geotiff
+
+# --- 2. 运行输出成果目录 (output/) ---
+output/*
+!output/.gitkeep
+output/**/*
+!output/**/.gitkeep
+
+# --- 3. Python 编译与运行缓存 ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# --- 4. 虚拟环境与 IDE 配置 ---
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- 5. 操作系统临时文件 ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini

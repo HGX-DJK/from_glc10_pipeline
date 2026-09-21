@@ -32,10 +32,11 @@ class GLC10Loader:
         self.nominal_res = self.config.get("spatial", {}).get("nominal_resolution_meters", 10.0)
 
     def resolve_glc10_file(self, specified_path: str = None) -> str:
-        """解析输入 GeoTIFF 路径，若缺失则自动生成标准仿真瓦片。"""
+        """解析输入 GeoTIFF 路径，若指定 synthetic 模式或文件缺失则生成/使用多作物基准仿真瓦片。"""
         if specified_path and os.path.exists(specified_path):
             return specified_path
 
+        run_mode = str(self.config.get("input_source", {}).get("mode", "geotiff")).lower()
         geotiff_dir = self.config.get("input_source", {}).get("geotiff_dir", "data/glc10_tifs")
         if not os.path.isabs(geotiff_dir):
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -43,16 +44,30 @@ class GLC10Loader:
             if os.path.exists(cand_dir):
                 geotiff_dir = cand_dir
 
+        synthetic_path = os.path.join(geotiff_dir, "FROM_GLC10_multicrop_benchmark_demo.tif")
+
+        # 1. 若显式指定为 synthetic 模式，使用标准多作物基准瓦片 (水稻11/大棚12/旱作13/果园24/翻耕94)
+        if run_mode == "synthetic":
+            os.makedirs(geotiff_dir, exist_ok=True)
+            if not os.path.exists(synthetic_path):
+                synth = GLC10SyntheticGenerator(height=600, width=600, res_meters=self.nominal_res)
+                synth.save_synthetic_geotiff(synthetic_path)
+            return synthetic_path
+
+        # 2. geotiff 真实瓦片模式：优先读取用户放置的真实瓦片
         if os.path.exists(geotiff_dir):
             candidates = sorted(glob.glob(os.path.join(geotiff_dir, "*.tif*")))
-            if candidates:
+            real_candidates = [c for c in candidates if "benchmark_demo" not in os.path.basename(c)]
+            if real_candidates:
+                return real_candidates[0]
+            elif candidates:
                 return candidates[0]
 
-        # 自动生成开箱即用仿真数据
+        # 3. 兜底自动生成开箱即用多作物仿真数据
         os.makedirs(geotiff_dir, exist_ok=True)
-        synthetic_path = os.path.join(geotiff_dir, "FROM_GLC10_benchmark_demo.tif")
-        synth = GLC10SyntheticGenerator(height=600, width=600, res_meters=self.nominal_res)
-        synth.save_synthetic_geotiff(synthetic_path)
+        if not os.path.exists(synthetic_path):
+            synth = GLC10SyntheticGenerator(height=600, width=600, res_meters=self.nominal_res)
+            synth.save_synthetic_geotiff(synthetic_path)
         return synthetic_path
 
     def load_glc10_raster(self, tif_path: str = None) -> tuple:
