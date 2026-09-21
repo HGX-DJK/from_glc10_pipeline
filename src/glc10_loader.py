@@ -10,6 +10,12 @@ import numpy as np
 from src.glc10_synthetic import GLC10SyntheticGenerator
 
 try:
+    from src.env_utils import sanitize_proj_gdal_env
+    sanitize_proj_gdal_env()
+except ImportError:
+    pass
+
+try:
     import rasterio
     HAS_RASTERIO = True
 except ImportError:

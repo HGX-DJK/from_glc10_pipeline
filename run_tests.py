@@ -14,6 +14,13 @@ project_dir = os.path.dirname(os.path.abspath(__file__))
 if project_dir not in sys.path:
     sys.path.insert(0, project_dir)
 
+# 自动修复 Windows 下 PostgreSQL/PostGIS PROJ_LIB 冲突
+try:
+    from src.env_utils import sanitize_proj_gdal_env
+    sanitize_proj_gdal_env()
+except ImportError:
+    pass
+
 from src.glc10_synthetic import GLC10SyntheticGenerator
 from src.glc10_loader import GLC10Loader
 from src.glc10_parcel_segmenter import GLC10ParcelSegmenter

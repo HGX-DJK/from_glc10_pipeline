@@ -104,8 +104,18 @@ class GLC10UnbiasedEstimator:
                 "users_accuracy_UA": round(ua, 3)
             })
 
-        df_report = pd.DataFrame(report_rows)
-        df_cm = pd.DataFrame(cm_records)
+        if not report_rows:
+            df_report = pd.DataFrame(columns=[
+                "crop_code", "crop_name", "naive_area_mu", "unbiased_calibrated_mu",
+                "se_analytic_mu", "cv_pct", "ci_95_lower_mu", "ci_95_upper_mu",
+                "producers_accuracy", "users_accuracy", "bias_correction_mu"
+            ])
+            df_cm = pd.DataFrame(columns=[
+                "crop_code", "crop_name", "weight_W_i", "producers_accuracy_PA", "users_accuracy_UA"
+            ])
+        else:
+            df_report = pd.DataFrame(report_rows)
+            df_cm = pd.DataFrame(cm_records)
 
         df_report.to_csv(report_csv, index=False, encoding="utf-8-sig")
         df_cm.to_csv(cm_csv, index=False, encoding="utf-8-sig")

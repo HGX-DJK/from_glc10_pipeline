@@ -8,6 +8,12 @@ import os
 import numpy as np
 
 try:
+    from src.env_utils import sanitize_proj_gdal_env
+    sanitize_proj_gdal_env()
+except ImportError:
+    pass
+
+try:
     import rasterio
     from rasterio.transform import from_origin
     HAS_RASTERIO = True

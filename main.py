@@ -10,6 +10,13 @@ FROM-GLC10 (全球 10 米地表覆盖) 专用农业地块提取与联合国无�
 
 import os
 import sys
+
+# 自动修复 Windows 下 PostgreSQL/PostGIS PROJ_LIB 冲突
+try:
+    import src.env_utils
+except ImportError:
+    pass
+
 import argparse
 import yaml
 import time

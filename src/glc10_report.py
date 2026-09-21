@@ -17,8 +17,21 @@ class GLC10ReportGenerator:
         os.makedirs(os.path.dirname(output_html_path), exist_ok=True)
         now_str = datetime.datetime.now().strftime("%Y年%m月%d日")
 
-        df_acreage = pd.read_csv(acreage_csv) if os.path.exists(acreage_csv) else pd.DataFrame()
-        df_parcels = pd.read_csv(parcel_csv) if os.path.exists(parcel_csv) else pd.DataFrame()
+        if os.path.exists(acreage_csv) and os.path.getsize(acreage_csv) > 0:
+            try:
+                df_acreage = pd.read_csv(acreage_csv)
+            except Exception:
+                df_acreage = pd.DataFrame()
+        else:
+            df_acreage = pd.DataFrame()
+
+        if os.path.exists(parcel_csv) and os.path.getsize(parcel_csv) > 0:
+            try:
+                df_parcels = pd.read_csv(parcel_csv)
+            except Exception:
+                df_parcels = pd.DataFrame()
+        else:
+            df_parcels = pd.DataFrame()
 
         total_parcels = len(df_parcels)
         total_parcel_mu = float(df_parcels["area_mu"].sum()) if not df_parcels.empty else 0.0
