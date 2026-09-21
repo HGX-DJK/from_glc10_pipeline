@@ -94,9 +94,15 @@ class GLC10VectorExporter:
             if len(pts_2d) < 4:
                 continue
 
-            # RDP 拓扑抽稀 (大地经纬度容差 ~ 10-20 米: 0.0001 度 ≈ 10米)
-            tol = (self.rdp_tolerance * 0.0001) if is_geo else (self.rdp_tolerance * self.res_meters)
-            pts_2d = simplify_polygon(pts_2d, tolerance=tol)
+            # RDP 拓扑抽稀 (动态降维：针对超长蜿蜒水体或森林，自适应增大容差以防浏览器崩溃)
+            base_tol = (self.rdp_tolerance * 0.0001) if is_geo else (self.rdp_tolerance * self.res_meters)
+            pts_count = len(pts_2d)
+            if pts_count > 10000:
+                base_tol *= 4.0
+            elif pts_count > 3000:
+                base_tol *= 2.0
+                
+            pts_2d = simplify_polygon(pts_2d, tolerance=base_tol)
             if len(pts_2d) < 4:
                 continue
 
@@ -122,16 +128,20 @@ class GLC10VectorExporter:
             compactness = float(4.0 * np.pi * area_m2 / (perimeter_m * perimeter_m))
             compactness = min(max(compactness, 0.001), 1.0)
 
-            # 农机作业适宜度科学评价 (面积规模与几何紧凑度双重矩阵考核)
+            # 农机作业适宜度科学评价 (仅对代码为 10 的农田生效)
             area_mu = p_info["area_mu"]
-            if compactness >= 0.25 and area_mu >= 15.0:
-                machinery_suitability = "优 (集中连片优质适机区)"
-            elif compactness >= 0.10 and area_mu >= 5.0:
-                machinery_suitability = "良 (标准规整农机作业区)"
-            elif compactness >= 0.04:
-                machinery_suitability = "中 (狭长带状待整合区)"
+            crop_code = p_info.get("dominant_crop_code", 10)
+            if crop_code != 10:
+                machinery_suitability = "N/A (非农生态自然地貌)"
             else:
-                machinery_suitability = "异形/碎 (建议平整并块整治)"
+                if compactness >= 0.25 and area_mu >= 15.0:
+                    machinery_suitability = "优 (集中连片优质适机区)"
+                elif compactness >= 0.10 and area_mu >= 5.0:
+                    machinery_suitability = "良 (标准规整农机作业区)"
+                elif compactness >= 0.04:
+                    machinery_suitability = "中 (狭长带状待整合区)"
+                else:
+                    machinery_suitability = "异形/碎 (建议平整并块整治)"
 
             # 中心坐标
             all_xs = [p[0] for p in pts_2d]

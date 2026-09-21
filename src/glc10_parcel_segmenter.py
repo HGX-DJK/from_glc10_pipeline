@@ -40,107 +40,94 @@ class GLC10ParcelSegmenter:
             parcel_list (list): 各地块属性字典清单
         """
         rows, cols = crop_mask.shape
-        cropland_binary = (crop_mask > 0).astype(np.uint8)
-
-        # 1. 相邻不同农作物之间的交界处切片差分梯度断开
-        if self.cut_cross_crop and rows > 1 and cols > 1:
-            diff_v = (crop_mask[:-1, :] > 0) & (crop_mask[1:, :] > 0) & (crop_mask[:-1, :] != crop_mask[1:, :])
-            diff_h = (crop_mask[:, :-1] > 0) & (crop_mask[:, 1:] > 0) & (crop_mask[:, :-1] != crop_mask[:, 1:])
-
-            cropland_binary[:-1, :][diff_v] = 0
-            cropland_binary[1:, :][diff_v] = 0
-            cropland_binary[:, :-1][diff_h] = 0
-            cropland_binary[:, 1:][diff_h] = 0
-
-        # [已移除] 1.5 强制网格切分（响应用户反馈：恢复农田真实自然的不规则形态，不再强制切出方块）
-
-        # 2. 10 米专属形态学开运算 (Opening = 腐蚀+膨胀)
-        # 支持 cross (4-邻域十字交叉核，保护 10~20 米小农狭长带状田) 与 square (8-邻域方块核)
-        if self.apply_erosion:
-            if self.struct_type == "cross":
-                structure = ndimage.generate_binary_structure(2, 1)  # 十字核
-            else:
-                k = max(3, self.kernel_size if self.kernel_size % 2 == 1 else self.kernel_size + 1)
-                structure = np.ones((k, k), dtype=np.uint8)
-            cleaned = ndimage.binary_opening(cropland_binary, structure=structure).astype(np.uint8)
-        else:
-            cleaned = cropland_binary
-
-        # 3. 闭合地块内部微小空洞（如阴影或孤立失测像元）
-        if self.fill_holes:
-            cleaned = ndimage.binary_fill_holes(cleaned).astype(np.uint8)
-
-        # 4. 8-连通域标记独立农田斑块
-        structure_conn = ndimage.generate_binary_structure(2, 2)
-        labeled_array, num_features = ndimage.label(cleaned, structure=structure_conn)
-
-        if num_features == 0:
-            return np.zeros((rows, cols), dtype=np.int32), []
-
-        # 5. 统计每个斑块大小并进行合法面积筛选
-        counts = np.bincount(labeled_array.ravel())
-        component_sizes = counts[1:num_features + 1]
-        areas_m2 = component_sizes * self.pixel_area_m2
-
-        # 面积阈值区间筛选 [min_area_m2, max_area_m2]
-        valid_comp_indices = np.where((areas_m2 >= self.min_area_m2) & (areas_m2 <= self.max_area_m2))[0] + 1
-
-        if len(valid_comp_indices) == 0:
-            # 宽容兜底：若全图斑块较大，放宽上限
-            valid_comp_indices = np.where(areas_m2 >= self.min_area_m2)[0] + 1
-
-        # 按地块面积降序排列，优选主力核心地块
-        sorted_order = np.argsort(-areas_m2[valid_comp_indices - 1])
-        sorted_valid = valid_comp_indices[sorted_order]
-
-        if len(sorted_valid) > self.max_export_parcels:
-            selected_comps = sorted_valid[:self.max_export_parcels].tolist()
-        else:
-            selected_comps = sorted_valid.tolist()
-
-        # 6. 生成新的地块编号掩膜与提取地块属性
         parcel_id_mask = np.zeros((rows, cols), dtype=np.int32)
-        slices = ndimage.find_objects(labeled_array)
-        parcel_list = []
+        all_parcels = []
+        current_id = 1
 
-        for new_id, comp_id in enumerate(selected_comps, start=1):
-            sl = slices[comp_id - 1]
-            if sl is None:
+        # 准备形态学核
+        if self.struct_type == "cross":
+            structure = ndimage.generate_binary_structure(2, 1)
+        else:
+            k = max(3, self.kernel_size if self.kernel_size % 2 == 1 else self.kernel_size + 1)
+            structure = np.ones((k, k), dtype=np.uint8)
+        structure_conn = ndimage.generate_binary_structure(2, 2)
+
+        # 逐类别严格独立处理，杜绝不同地物（如农田与森林）粘连吞噬
+        unique_codes = np.unique(crop_mask)
+        for code in unique_codes:
+            if code == 0:
+                continue
+                
+            binary = (crop_mask == code).astype(np.uint8)
+
+            if self.apply_erosion:
+                binary = ndimage.binary_opening(binary, structure=structure).astype(np.uint8)
+            if self.fill_holes:
+                binary = ndimage.binary_fill_holes(binary).astype(np.uint8)
+
+            labeled_class, num_feat = ndimage.label(binary, structure=structure_conn)
+            del binary # 释放 500MB 内存
+            if num_feat == 0:
                 continue
 
-            sub_labeled = labeled_array[sl]
-            comp_mask_local = (sub_labeled == comp_id)
+            # 分块统计面积，避免 np.bincount 全局 int64 转换导致 3.7GB 内存尖峰 OOM
+            counts = np.zeros(num_feat + 1, dtype=np.int64)
+            flat_labeled = labeled_class.ravel()
+            chunk_size = 10000000  # 每次处理一千万像素，极低内存占用
+            for i in range(0, flat_labeled.size, chunk_size):
+                chunk = flat_labeled[i:i + chunk_size]
+                counts += np.bincount(chunk, minlength=num_feat + 1)
+                
+            areas_m2 = counts[1:num_feat + 1] * self.pixel_area_m2
 
-            # 写入全局地块 ID
-            parcel_id_mask[sl][comp_mask_local] = new_id
+            valid_indices = np.where((areas_m2 >= self.min_area_m2) & (areas_m2 <= self.max_area_m2))[0] + 1
+            if len(valid_indices) == 0:
+                valid_indices = np.where(areas_m2 >= self.min_area_m2)[0] + 1
 
-            # 多数投票裁定地块主导农作物类别
-            sub_crops = crop_mask[sl][comp_mask_local]
-            crop_codes, crop_counts = np.unique(sub_crops[sub_crops > 0], return_counts=True)
+            slices = ndimage.find_objects(labeled_class)
+            for comp_id in valid_indices:
+                sl = slices[comp_id - 1]
+                if sl is None:
+                    continue
+                
+                comp_mask_local = (labeled_class[sl] == comp_id)
+                area_m2_val = float(np.sum(comp_mask_local)) * self.pixel_area_m2
+                
+                crop_name = self.target_crop_codes.get(int(code), f"地表要素(代码{code})")
+                
+                all_parcels.append({
+                    "int_id": current_id,
+                    "dominant_crop_code": int(code),
+                    "crop_name": crop_name,
+                    "crop_purity": 1.0,
+                    "pixel_count": int(np.sum(comp_mask_local)),
+                    "area_m2": round(area_m2_val, 1),
+                    "area_mu": round(area_m2_val / (2000.0 / 3.0), 2),
+                    "area_ha": round(area_m2_val / 10000.0, 2),
+                    "bbox_slice": sl,
+                    "local_mask": comp_mask_local
+                })
+                current_id += 1
 
-            if len(crop_codes) > 0:
-                dominant_code = int(crop_codes[np.argmax(crop_counts)])
-                purity = float(np.max(crop_counts) / len(sub_crops))
-            else:
-                dominant_code = 10
-                purity = 1.0
+        # 全局按面积降序排列，优选主力图斑
+        all_parcels.sort(key=lambda x: x["area_m2"], reverse=True)
+        if len(all_parcels) > self.max_export_parcels:
+            selected_parcels = all_parcels[:self.max_export_parcels]
+        else:
+            selected_parcels = all_parcels
 
-            crop_name = self.target_crop_codes.get(dominant_code, f"农作物(代码{dominant_code})")
-            area_m2 = float(np.sum(comp_mask_local)) * self.pixel_area_m2
-            area_mu = area_m2 / (2000.0 / 3.0)
-            area_ha = area_m2 / 10000.0
+        # 将筛选后的主力图斑写入全局掩膜
+        parcel_list = []
+        for i, p_info in enumerate(selected_parcels, start=1):
+            sl = p_info["bbox_slice"]
+            comp_mask_local = p_info["local_mask"]
+            parcel_id_mask[sl][comp_mask_local] = i
+            
+            p_info["int_id"] = i
+            p_info["parcel_id"] = f"GLC10_P{i:04d}"
+            del p_info["local_mask"]  # 释放内存
+            parcel_list.append(p_info)
 
-            parcel_list.append({
-                "parcel_id": f"GLC10_P{new_id:04d}",
-                "int_id": new_id,
-                "dominant_crop_code": dominant_code,
-                "crop_name": crop_name,
-                "crop_purity": round(purity, 3),
-                "pixel_count": int(np.sum(comp_mask_local)),
-                "area_m2": round(area_m2, 1),
-                "area_mu": round(area_mu, 2),
-                "area_ha": round(area_ha, 2),
-                "bbox_slice": sl
-            })
+        return parcel_id_mask, parcel_list
 
         return parcel_id_mask, parcel_list

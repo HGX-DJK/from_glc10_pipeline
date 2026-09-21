@@ -288,6 +288,7 @@ class GLC10WebGISBuilder:
           if ((p.machinery_suitability || '').indexOf('良') !== -1) suitColor = '#0284c7';
           else if ((p.machinery_suitability || '').indexOf('中') !== -1) suitColor = '#d97706';
           else if ((p.machinery_suitability || '').indexOf('异形') !== -1 || (p.machinery_suitability || '').indexOf('碎') !== -1) suitColor = '#dc2626';
+          else if ((p.machinery_suitability || '').indexOf('N/A') !== -1) suitColor = '#64748b';
 
           const content = `
             <div style="font-size:13px; line-height:1.6; min-width:210px;">
